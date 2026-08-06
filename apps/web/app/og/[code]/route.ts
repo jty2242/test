@@ -35,8 +35,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ code: stri
   const { code } = await ctx.params;
 
   try {
-    const [font] = await Promise.all([cardFont(), pngReady()]);
-    const svg = await renderCard(code, { font });
+    await pngReady();
+    const svg = await renderCard(code, { font: cardFont() });
     const png = svgToPng(svg, { width: 1200 });
 
     return new Response(png as unknown as BodyInit, {

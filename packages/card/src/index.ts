@@ -17,4 +17,5 @@ export {
 export type { CardKind, CardOptions } from './card.ts';
 
 export { initCardPng, svgToPng, PngNotInitialized } from './png.ts';
+export { cardFontData } from './font-data.ts';
 export type { PngOptions } from './png.ts';
