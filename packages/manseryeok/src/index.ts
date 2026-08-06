@@ -32,3 +32,29 @@ export {
   MalformedPanCode,
   InvalidPan,
 } from './pan-code.ts';
+
+export { isDst, meridianFor, standardOffsetMinutes } from './timezone.ts';
+
+export {
+  toTrueSolarTime,
+  equationOfTime,
+  SEOUL_LONGITUDE,
+} from './true-solar-time.ts';
+export type { WallClock, TrueSolarResult, TrueSolarOptions } from './true-solar-time.ts';
+
+export {
+  DAY_ANCHOR,
+  dayPillarFromDate,
+  dayAndHourPillars,
+  hourBranchIndex,
+  hourStemIndex,
+  toGanji,
+} from './day-hour-pillar.ts';
+export type { DayHourPillars, TrueSolarMoment } from './day-hour-pillar.ts';
+
+/*
+ * 아직 없는 것 (절기 테이블 필요):
+ *   년주 — 입춘 기준으로 해가 바뀐다
+ *   월주 — 12절(節)이 월의 경계다
+ *   대운 — 월주 + 성별 × 년간 음양으로 순행/역행
+ */
