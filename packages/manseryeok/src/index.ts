@@ -73,9 +73,25 @@ export {
   fromJulianDay,
 } from './solar-position.ts';
 
+export {
+  YEAR_ANCHOR,
+  yearPillar,
+  monthPillar,
+  sajuYear,
+  precedingMonthTerm,
+  isYangYear,
+} from './year-month-pillar.ts';
+export type { Moment } from './year-month-pillar.ts';
+
+export { daeun, luckDirection } from './daeun.ts';
+export type { Daeun, LuckPillar, LuckDirection } from './daeun.ts';
+
+export { calculate, isJasiAmbiguousHour, InvalidBirthInput } from './calculate.ts';
+export type { BirthInput, SajuResult, Chart } from './calculate.ts';
+
 /*
  * 아직 없는 것:
- *   년주 — 입춘 기준으로 해가 바뀐다 (절기는 준비됨)
- *   월주 — 12절(節)이 월의 경계다 (절기는 준비됨)
- *   대운 — 월주 + 성별 × 년간 음양으로 순행/역행
+ *   음력 입력 — 음↔양력 변환표가 필요하다. KASI getSpcifyLunCalInfo로
+ *               수집 가능하지만 호출 수가 많다. calculate()는 양력만 받는다.
+ *   오행 집계 — 카드의 오행 비율. 8글자에서 세면 되므로 계산은 사소하다.
  */
