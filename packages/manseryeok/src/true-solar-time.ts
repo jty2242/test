@@ -18,7 +18,7 @@
  *    독립 오라클 2개와 대조해 확정한다. 여기가 이 엔진에서 가장 조정이 필요한 노브다.
  */
 
-import { isDst, meridianFor } from './timezone.ts';
+import { koreaTimeContext } from './timezone.ts';
 
 /** 서울 경도. 출생지를 입력받게 되면 이 값이 파라미터가 된다. */
 export const SEOUL_LONGITUDE = 126.978;
@@ -83,9 +83,10 @@ export function toTrueSolarTime(clock: WallClock, options: TrueSolarOptions = {}
   const longitude = options.longitude ?? SEOUL_LONGITUDE;
   const { year, month, day, hour, minute } = clock;
 
-  const dst = isDst(year, month, day) ? -60 : 0;
-  const meridian = meridianFor(year, month, day);
-  const longitudeAdj = (longitude - meridian) * MINUTES_PER_DEGREE;
+  // 전환 시각이 자정이 아닌 해가 있으므로(1955~60 00:30, 1987~88 02:00) 시·분까지 넘긴다.
+  const tz = koreaTimeContext(year, month, day, hour, minute);
+  const dst = tz.isDst ? -60 : 0;
+  const longitudeAdj = (longitude - tz.meridianDeg) * MINUTES_PER_DEGREE;
   const eot = options.useEquationOfTime ? equationOfTime(year, month, day) : 0;
 
   const offsetMinutes = dst + longitudeAdj + eot;

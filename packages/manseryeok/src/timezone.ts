@@ -1,97 +1,112 @@
 /**
- * 한국 표준시의 역사. 시계가 가리킨 시각을 실제 태양 위치로 되돌리려면
- * "그때 그 시계가 어느 자오선을 기준으로 돌고 있었나"를 먼저 알아야 한다.
+ * 한국 표준시의 역사 — IANA tzdata(Asia/Seoul)에서 파생한다. 손으로 표를 들고
+ * 있지 않는다. Node에 tzdata가 내장돼 있고 Node를 올리면 같이 갱신된다.
  *
- * 흔한 오해: 한국은 항상 UTC+9였다 → 아니다. 1954~1961년에는 UTC+8:30이었고,
- * 그 기준 자오선(127.5°E)이 서울의 실제 경도와 거의 같다. 즉 이 기간 출생자는
- * 경도 보정이 사실상 0이다. 이걸 모르고 일괄 -32분을 빼면 8년치가 통째로 틀린다.
+ * 흔한 오해: 한국은 항상 UTC+9였다 → 아니다.
  *
- *   1908-04-01  UTC+8:30   기준 127.5°E   ← 경도 보정 ~0
- *   1912-01-01  UTC+9:00   기준 135°E     ← 경도 보정 -32분
- *   1954-03-21  UTC+8:30   기준 127.5°E   ← 경도 보정 ~0
- *   1961-08-10  UTC+9:00   기준 135°E     ← 현재까지
+ *   ~1908-04-01  +8:27   지방시 (표준시 제정 이전)
+ *   1908-04-01   +8:30   기준 127.5°E  ← 경도 보정 ~0
+ *   1912-01-01   +9:00   기준 135°E    ← 경도 보정 -32분
+ *   1954-03-21   +8:30   기준 127.5°E  ← 경도 보정 ~0
+ *   1961-08-10   +9:00   기준 135°E    ← 현재까지
  *
- * 여기에 서머타임이 겹친다. 서머타임 기간에는 시계가 한 시간 앞서 있으므로
- * 태양시로 되돌릴 때 한 시간을 도로 빼야 한다.
+ *   서머타임 12회: 1948~1951, 1955~1960, 1987~1988. 전부 정확히 +60분.
+ *   전환 시각이 자정이 아니다 (1955~60은 00:30, 1987~88은 02:00/03:00).
+ *   날짜 단위로만 판정하면 전환일 새벽 출생자가 한 시간 어긋난다.
  *
- * ⚠️ 아래 날짜들은 교차검증(T17)에서 독립 오라클 2개와 대조해 확정할 것.
- *    특히 서머타임 시행/해제 일자는 자료마다 하루씩 어긋나는 경우가 있다.
+ * 관측 가능한 오프셋은 네 가지뿐이다: 507 / 510 / 540 / 570 / 600.
+ * 서머타임이 항상 +60분이므로 기저 오프셋과 서머타임 여부가 오프셋 하나에서
+ * 갈라진다. 기준 자오선은 기저 오프셋 ÷ 4 (1도 = 4분).
  */
 
-/** 표준 자오선 전환. KST 기준 로컬 날짜가 아니라 UTC 순간으로 잡는다. */
-interface MeridianPeriod {
-  /** 이 순간부터 적용 (UTC ms) */
-  fromUtc: number;
-  /** 표준시 오프셋 (분) */
+const TZ = 'Asia/Seoul';
+
+const OFFSET_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: TZ,
+  timeZoneName: 'longOffset',
+});
+
+/** 서머타임은 한국에서 항상 정확히 +60분이었다. */
+const DST_MINUTES = 60;
+
+/** 서머타임이 걸린 오프셋 → 기저 오프셋 */
+const DST_OFFSETS = new Set([570, 600]);
+
+export interface KoreaTimeContext {
+  /** 벽시계에 대응하는 UTC 순간 */
+  utcMs: number;
+  /** 그 순간의 실제 오프셋 (분). 서머타임 포함. */
   offsetMinutes: number;
-  /** 기준 자오선 (동경 도) */
+  /** 서머타임을 뺀 표준시 오프셋 (분) */
+  baseOffsetMinutes: number;
+  isDst: boolean;
+  /** 기준 자오선 (동경 도). 기저 오프셋 ÷ 4. */
   meridianDeg: number;
 }
 
-const H = 60;
-
-const MERIDIAN_HISTORY: readonly MeridianPeriod[] = [
-  { fromUtc: Date.UTC(1908, 3, 1, 0, 0) - 8.5 * H * 60000, offsetMinutes: 8.5 * H, meridianDeg: 127.5 },
-  { fromUtc: Date.UTC(1912, 0, 1, 0, 0) - 9 * H * 60000, offsetMinutes: 9 * H, meridianDeg: 135 },
-  { fromUtc: Date.UTC(1954, 2, 21, 0, 0) - 8.5 * H * 60000, offsetMinutes: 8.5 * H, meridianDeg: 127.5 },
-  { fromUtc: Date.UTC(1961, 7, 10, 0, 0) - 9 * H * 60000, offsetMinutes: 9 * H, meridianDeg: 135 },
-];
-
-/** 서머타임 시행 구간. [시작, 끝) 로컬 날짜 (해당 연도 표준시 기준). */
-interface DstPeriod {
-  startY: number; startM: number; startD: number;
-  endY: number; endM: number; endD: number;
-}
-
-const DST_PERIODS: readonly DstPeriod[] = [
-  { startY: 1948, startM: 6, startD: 1, endY: 1948, endM: 9, endD: 13 },
-  { startY: 1949, startM: 4, startD: 3, endY: 1949, endM: 9, endD: 11 },
-  { startY: 1950, startM: 4, startD: 1, endY: 1950, endM: 9, endD: 11 },
-  { startY: 1951, startM: 5, startD: 6, endY: 1951, endM: 9, endD: 9 },
-  { startY: 1955, startM: 5, startD: 5, endY: 1955, endM: 9, endD: 9 },
-  { startY: 1956, startM: 5, startD: 20, endY: 1956, endM: 9, endD: 30 },
-  { startY: 1957, startM: 5, startD: 5, endY: 1957, endM: 9, endD: 22 },
-  { startY: 1958, startM: 5, startD: 4, endY: 1958, endM: 9, endD: 21 },
-  { startY: 1959, startM: 5, startD: 3, endY: 1959, endM: 9, endD: 20 },
-  { startY: 1960, startM: 5, startD: 1, endY: 1960, endM: 9, endD: 18 },
-  { startY: 1987, startM: 5, startD: 10, endY: 1987, endM: 10, endD: 11 },
-  { startY: 1988, startM: 5, startD: 8, endY: 1988, endM: 10, endD: 9 },
-];
-
-/** 로컬 벽시계 날짜를 비교 가능한 정수로. YYYYMMDD */
-function ymd(y: number, m: number, d: number): number {
-  return y * 10000 + m * 100 + d;
-}
-
-/**
- * 벽시계에 적힌 날짜에 서머타임이 걸려 있었나.
- * 경계일 자체의 시각별 처리는 자료가 불충분해 날짜 단위로만 판정한다.
- * 경계일 출생은 교차검증에서 불일치로 뜰 것이고, 그때 손으로 확정한다.
- */
-export function isDst(year: number, month: number, day: number): boolean {
-  const t = ymd(year, month, day);
-  return DST_PERIODS.some(
-    (p) => t >= ymd(p.startY, p.startM, p.startD) && t < ymd(p.endY, p.endM, p.endD),
+/** UTC 순간의 Asia/Seoul 오프셋(분). tzdata 조회. */
+export function offsetAtUtc(utcMs: number): number {
+  const part = OFFSET_FORMAT.formatToParts(new Date(utcMs)).find(
+    (p) => p.type === 'timeZoneName',
   );
+  const m = part?.value.match(/GMT([+-])(\d{2}):(\d{2})/);
+  if (!m) throw new Error(`오프셋을 읽지 못했습니다: ${part?.value}`);
+  return (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]));
 }
 
 /**
- * 벽시계에 적힌 시각이 어느 표준 자오선 기준이었나.
- * 자오선 전환은 8년 단위라 벽시계 날짜만으로 판정해도 안전하다.
+ * 벽시계에 적힌 시각 → 그 시각의 시간대 맥락.
+ *
+ * Intl은 UTC→로컬 방향만 주므로 역방향은 한 번 추정하고 수렴시킨다.
+ * 서머타임 해제일의 되풀이되는 한 시간은 표준시 쪽으로 해석된다.
+ * 역사상 12일에만 해당하고, 그 경계는 어차피 교차검증에서 손으로 확정한다.
  */
-export function meridianFor(year: number, month: number, day: number): number {
-  const t = ymd(year, month, day);
-  if (t < ymd(1908, 4, 1)) return 127.5; // 표준시 제정 이전 — 지방시를 그대로 쓴 셈
-  if (t < ymd(1912, 1, 1)) return 127.5;
-  if (t < ymd(1954, 3, 21)) return 135;
-  if (t < ymd(1961, 8, 10)) return 127.5;
-  return 135;
+export function koreaTimeContext(
+  year: number,
+  month: number,
+  day: number,
+  hour = 12,
+  minute = 0,
+): KoreaTimeContext {
+  const naive = Date.UTC(year, month - 1, day, hour, minute);
+
+  let utcMs = naive - 9 * 60 * 60000;
+  for (let i = 0; i < 3; i++) {
+    const next = naive - offsetAtUtc(utcMs) * 60000;
+    if (next === utcMs) break;
+    utcMs = next;
+  }
+
+  const offsetMinutes = offsetAtUtc(utcMs);
+  const isDst = DST_OFFSETS.has(offsetMinutes);
+  const baseOffsetMinutes = isDst ? offsetMinutes - DST_MINUTES : offsetMinutes;
+
+  return {
+    utcMs,
+    offsetMinutes,
+    baseOffsetMinutes,
+    isDst,
+    meridianDeg: baseOffsetMinutes / 4,
+  };
 }
 
-/** 표준시 오프셋(분). 서머타임 포함. 참고용 — 계산에는 meridianFor/isDst를 쓴다. */
-export function standardOffsetMinutes(year: number, month: number, day: number): number {
-  const base = meridianFor(year, month, day) === 135 ? 9 * H : 8.5 * H;
-  return base + (isDst(year, month, day) ? H : 0);
+/** 그 벽시계 시각에 서머타임이 걸려 있었나. 기본 정오 — 전환 시각을 피한다. */
+export function isDst(year: number, month: number, day: number, hour = 12, minute = 0): boolean {
+  return koreaTimeContext(year, month, day, hour, minute).isDst;
 }
 
-export { MERIDIAN_HISTORY, DST_PERIODS };
+/** 그 벽시계 시각의 기준 자오선 (동경 도). */
+export function meridianFor(year: number, month: number, day: number, hour = 12, minute = 0): number {
+  return koreaTimeContext(year, month, day, hour, minute).meridianDeg;
+}
+
+/** 표준시 오프셋(분). 서머타임 포함. */
+export function standardOffsetMinutes(
+  year: number,
+  month: number,
+  day: number,
+  hour = 12,
+  minute = 0,
+): number {
+  return koreaTimeContext(year, month, day, hour, minute).offsetMinutes;
+}
