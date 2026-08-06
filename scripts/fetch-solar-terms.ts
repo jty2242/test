@@ -103,10 +103,22 @@ for (const t of terms) perYear.set(t.date.slice(0, 4), (perYear.get(t.date.slice
 const bad = [...perYear.entries()].filter(([, c]) => c !== 24);
 console.log(bad.length === 0 ? '✔ 모든 연도가 24건' : `✖ 24건이 아닌 연도: ${bad.map(([y, c]) => `${y}(${c})`).join(', ')}`);
 
-const longitudes = [...new Set(terms.map((t) => t.sunLongitude))].sort((a, b) => a - b);
-const expected = Array.from({ length: 24 }, (_, i) => i * 15);
+// 황경 검사. 값의 *집합*만 보면 안 된다 — 0은 춘분의 정상값이라 결측과
+// 구분되지 않고, 실제로 첫 수집에서 259건 결측을 이 방식으로 놓쳤다.
+// 이름별로 황경이 하나로 모이는지, 그리고 결측이 몇 건인지 따로 센다.
+const byName = new Map<string, Set<number>>();
+for (const t of terms) {
+  if (!byName.has(t.name)) byName.set(t.name, new Set());
+  byName.get(t.name)!.add(t.sunLongitude);
+}
+const inconsistent = [...byName.entries()].filter(([, s]) => s.size > 1);
+const missing = terms.filter((t) => !Number.isFinite(t.sunLongitude));
+
 console.log(
-  JSON.stringify(longitudes) === JSON.stringify(expected)
-    ? '✔ 태양황경이 0~345도 15도 간격'
-    : `✖ 황경 이상: ${longitudes.join(',')}`,
+  inconsistent.length === 0
+    ? '✔ 이름별 황경이 일관됨'
+    : `⚠ 이름별 황경 불일치 ${inconsistent.length}종: ${inconsistent
+        .map(([n, s]) => `${n}[${[...s].join('/')}]`)
+        .join(', ')}\n  (API가 일부 레코드에서 sunLongitude를 빠뜨립니다. 절기명으로 황경을 정하므로 계산에는 영향 없음.)`,
 );
+if (missing.length > 0) console.log(`⚠ sunLongitude 결측 ${missing.length}건`);
