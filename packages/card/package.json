@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/card.ts"
+    ".": "./src/index.ts"
   },
   "dependencies": {
     "@saju/manseryeok": "*",
-    "satori": "^0.29.0"
+    "satori": "^0.29.0",
+    "@resvg/resvg-wasm": "^2.6.0"
   }
 }

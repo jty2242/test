@@ -11,6 +11,7 @@ import {
   UnsupportedGlyphs,
 } from '../src/card.ts';
 import { calculate, ganjiName } from '@saju/manseryeok';
+import { initCardPng, svgToPng, PngNotInitialized } from '../src/png.ts';
 
 const font = readFileSync('packages/card/assets/saju-subset.ttf');
 const sample = calculate({ year: 1998, month: 3, day: 14, hour: 7, minute: 20, gender: 'male' });
@@ -90,4 +91,30 @@ test('크기를 바꿀 수 있다 — 2차 기능이 같은 파이프라인을 �
   const svg = await renderCard(code, { font, width: 800, height: 800 });
   assert.ok(svg.includes('width="800"'));
   assert.ok(svg.includes('height="800"'));
+});
+
+
+// ── PNG 변환 ─────────────────────────────────────────────────────────────
+
+test('초기화 전에는 명확한 에러를 낸다', () => {
+  assert.throws(() => svgToPng('<svg xmlns="http://www.w3.org/2000/svg"/>'), PngNotInitialized);
+});
+
+test('카드가 PNG로 변환된다', async () => {
+  await initCardPng(readFileSync('node_modules/@resvg/resvg-wasm/index_bg.wasm'));
+
+  const svg = await renderCard(code, { font, ilju: '경오일주' });
+  const png = svgToPng(svg, { width: 1200 });
+
+  // PNG 매직 넘버
+  assert.deepEqual([...png.slice(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.ok(png.length > 5000, `PNG가 너무 작음: ${png.length}B`);
+});
+
+test('초기화는 여러 번 불러도 안전하다', async () => {
+  const wasm = readFileSync('node_modules/@resvg/resvg-wasm/index_bg.wasm');
+  await initCardPng(wasm);
+  await initCardPng(wasm);
+  const svg = await renderCard(code, { font });
+  assert.ok(svgToPng(svg).length > 5000);
 });
