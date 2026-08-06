@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.vercel/
+.env
+.env.local
+.DS_Store
+
+# gstack이 프로젝트 폴더에 만드는 상태 디렉토리
+.gstack/
+
+# 머신별 권한 설정 (.claude/settings.json은 공유, .local.json은 개인)
+.claude/settings.local.json
