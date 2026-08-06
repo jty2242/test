@@ -11,5 +11,9 @@
   },
   "engines": {
     "node": ">=22.6"
+  },
+  "dependencies": {
+    "satori": "^0.29.0",
+    "subset-font": "^2.5.0"
   }
 }

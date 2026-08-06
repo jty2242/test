@@ -86,6 +86,14 @@ export type { Moment } from './year-month-pillar.ts';
 export { daeun, luckDirection } from './daeun.ts';
 export type { Daeun, LuckPillar, LuckDirection } from './daeun.ts';
 
+export {
+  ELEMENTS,
+  elementOfStem,
+  elementOfBranch,
+  elementBalance,
+} from './elements.ts';
+export type { Element, ElementCount, ElementBalance } from './elements.ts';
+
 export { calculate, isJasiAmbiguousHour, InvalidBirthInput } from './calculate.ts';
 export type { BirthInput, SajuResult, Chart } from './calculate.ts';
 

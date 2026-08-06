@@ -10,3 +10,6 @@ node_modules/
 
 # 머신별 권한 설정 (.claude/settings.json은 공유, .local.json은 개인)
 .claude/settings.local.json
+
+# 서브셋 원본이 아닌 시스템 폰트는 커밋하지 않는다
+*.ttc

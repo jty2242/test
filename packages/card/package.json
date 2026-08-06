@@ -1,0 +1,13 @@
+{
+  "name": "@saju/card",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/card.ts"
+  },
+  "dependencies": {
+    "@saju/manseryeok": "*",
+    "satori": "^0.29.0"
+  }
+}
