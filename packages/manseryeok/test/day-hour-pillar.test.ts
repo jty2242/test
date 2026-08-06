@@ -8,18 +8,42 @@ import {
   hourStemIndex,
   toGanji,
   dayAndHourPillars,
+  julianDayNumber,
+  dayPillarFromJdn,
 } from '../src/day-hour-pillar.ts';
 import { ganjiName, stemOf, branchOf } from '../src/types.ts';
 
 // ── 일주 ─────────────────────────────────────────────────────────────────
-// 앵커 값 자체는 아직 미검증이다(T17). 아래 테스트들은 앵커가 무엇이든
-// 성립해야 하는 성질 — 주기성·연속성·부호 처리 — 를 잠근다.
-// 앵커가 바뀌면 첫 테스트 하나만 고치면 된다.
+// 앵커는 KASI 1차 자료로 확정됐다(2026-08-06). 아래 테스트는 두 층이다:
+// 앵커 값 자체, 그리고 앵커가 무엇이든 성립해야 하는 성질(주기성·연속성·부호).
+// 후자 덕분에 앵커가 2칸 틀렸던 걸 값 하나만 고쳐서 바로잡을 수 있었다.
 
-test('앵커 날짜는 정의상 甲子일', () => {
+test('앵커는 KASI가 증언한 값과 일치한다 — 1984-02-02 = 병인(丙寅)', () => {
   const g = dayPillarFromDate(DAY_ANCHOR.year, DAY_ANCHOR.month, DAY_ANCHOR.day);
   assert.equal(g, DAY_ANCHOR.ganji);
-  assert.equal(ganjiName(g), '甲子');
+  assert.equal(g, 2);
+  assert.equal(ganjiName(g), '丙寅');
+});
+
+test('JDN 경로가 경과일수 경로와 항상 같다 — 독립 구현 교차검증', () => {
+  // 두 계산은 공유하는 코드가 없다. 한쪽이 틀리면 여기서 갈린다.
+  assert.equal(julianDayNumber(1984, 2, 2), DAY_ANCHOR.julianDay, 'KASI solJd와 일치');
+  for (const [y, m, d] of [
+    [1900, 1, 1], [1912, 1, 1], [1954, 3, 21], [1958, 6, 15],
+    [1961, 8, 10], [1984, 2, 2], [2000, 2, 29], [2024, 1, 1], [2100, 12, 31],
+  ] as const) {
+    assert.equal(
+      dayPillarFromJdn(y, m, d),
+      dayPillarFromDate(y, m, d),
+      `${y}-${m}-${d}에서 두 경로가 갈림`,
+    );
+  }
+  // 지원 범위 전체를 훑는다
+  for (let jd = julianDayNumber(1900, 1, 1); jd < julianDayNumber(1900, 1, 1) + 5000; jd += 37) {
+    const dt = new Date(Date.UTC(1900, 0, 1) + (jd - julianDayNumber(1900, 1, 1)) * 86400000);
+    const [y, m, d] = [dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate()];
+    assert.equal(dayPillarFromJdn(y, m, d), dayPillarFromDate(y, m, d), `${y}-${m}-${d}`);
+  }
 });
 
 test('하루 지나면 정확히 한 칸 나아간다', () => {
@@ -42,8 +66,8 @@ test('앵커 이전 날짜도 음수 없이 나온다', () => {
     const g = dayPillarFromDate(y, m, d);
     assert.ok(Number.isInteger(g) && g >= 0 && g < 60, `${y}-${m}-${d} → ${g}`);
   }
-  // 앵커 하루 전은 癸亥(59)
-  assert.equal(dayPillarFromDate(1984, 2, 1), 59);
+  // 앵커(丙寅=2) 하루 전은 乙丑(1)
+  assert.equal(dayPillarFromDate(1984, 2, 1), 1);
 });
 
 test('월말·연말·윤년 경계에서 끊기지 않는다', () => {

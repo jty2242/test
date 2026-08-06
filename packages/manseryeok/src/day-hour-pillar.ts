@@ -20,21 +20,28 @@
 import type { GanjiIndex, JasiPolicy } from './types.ts';
 
 /**
- * ⚠️ 미검증 상수 — 교차검증(T17)에서 독립 오라클 2개로 확정할 것.
+ * 검증된 앵커 — KASI 1차 자료. (2026-08-06 확정)
  *
- * 일주 계산 전체가 이 앵커 하나에 걸려 있다. 하루라도 어긋나면 모든 사용자의
- * 일주가 통째로 밀린다. 지금 값은 널리 인용되는 기준이지만 1차 자료로 확인한
- * 것이 아니다. 배포 전에 반드시 검증하고, 틀리면 이 상수 하나만 고치면 된다.
+ * 일주 계산 전체가 이 상수 하나에 걸려 있다. 하루라도 어긋나면 모든 사용자의
+ * 일주가 통째로 밀린다.
  *
- * 검증 방법: 오라클 2개에 임의의 날짜 100개를 넣고 일주를 받아 여기 값과 대조.
- * 전부 같은 방향으로 N칸 밀려 있으면 앵커를 N만큼 옮기면 된다.
+ * 한국천문연구원 음양력 API가 양력 1984-02-02를 일진 병인(丙寅), 율리우스적일
+ * 2445733으로 반환한다. 丙寅은 60갑자 인덱스 2다.
+ *
+ *   최초 구현은 이 날짜를 甲子(0)로 잡았고 2칸 틀렸다. 널리 인용되는 값이라고
+ *   해서 맞는 건 아니었다. 1900~2026년 음력 1월 1일 127건 전부 델타 +2로
+ *   일정했고, 독립 경로인 JDN 공식 (solJd + 49) % 60 과도 127/127 일치했다.
+ *
+ * 재확인: scripts/verify-day-anchor.ts
  */
 export const DAY_ANCHOR = {
-  /** 양력 1984-02-02가 甲子일(60갑자 인덱스 0)이라는 전제 */
+  /** 양력 1984-02-02 = 병인(丙寅) = 60갑자 인덱스 2. KASI 음양력 API 확인. */
   year: 1984,
   month: 2,
   day: 2,
-  ganji: 0,
+  ganji: 2,
+  /** 같은 날의 율리우스적일. JDN 경로 교차검증에 쓴다. */
+  julianDay: 2445733,
 } as const;
 
 const MS_PER_DAY = 86400000;
@@ -50,6 +57,30 @@ export function dayPillarFromDate(year: number, month: number, day: number): Gan
   const days = Math.round((target - ANCHOR_UTC) / MS_PER_DAY);
   // JS의 %는 음수를 음수로 돌려준다. 앵커 이전 날짜를 위해 한 번 더 접는다.
   return (((days + DAY_ANCHOR.ganji) % 60) + 60) % 60;
+}
+
+/**
+ * 율리우스적일. 일주를 구하는 두 번째 경로 — 경과일수 계산과 독립이라
+ * 서로를 검증한다. KASI가 solJd로 같은 값을 주므로 1차 자료로도 확인된다.
+ */
+export function julianDayNumber(year: number, month: number, day: number): number {
+  const a = Math.floor((14 - month) / 12);
+  const y = year + 4800 - a;
+  const m = month + 12 * a - 3;
+  return (
+    day +
+    Math.floor((153 * m + 2) / 5) +
+    365 * y +
+    Math.floor(y / 4) -
+    Math.floor(y / 100) +
+    Math.floor(y / 400) -
+    32045
+  );
+}
+
+/** JDN 경로로 구한 일주. dayPillarFromDate와 항상 같아야 한다. */
+export function dayPillarFromJdn(year: number, month: number, day: number): GanjiIndex {
+  return (julianDayNumber(year, month, day) + 49) % 60;
 }
 
 /**

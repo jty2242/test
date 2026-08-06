@@ -1,23 +1,33 @@
 /**
- * DAY_ANCHOR 확정 스크립트.
+ * DAY_ANCHOR 재확인 스크립트.
  *
  *   node --env-file=.env.local --experimental-strip-types scripts/verify-day-anchor.ts
  *
  * 일주 계산 전체가 상수 하나에 걸려 있다. KASI가 일진을 1차 자료로 주므로
- * 추정할 필요가 없다. 임의 날짜를 뽑아 대조하고, 전부 같은 방향으로 N칸
- * 밀려 있으면 앵커를 N만큼 옮기면 끝난다.
+ * 추정할 필요가 없다.
  *
- * 출력이 "앵커 정확" 이면 day-hour-pillar.ts의 ⚠️ 주석을 지워도 된다.
+ * getSpcifyLunCalInfo는 음력 월/일 하나에 대해 연도 범위를 받아 매년의 양력
+ * 날짜와 일진을 한 번에 돌려준다. 호출 한 번에 100건 넘는 대조 표본이 나온다.
+ * (getSolCalInfo / getLunCalInfo는 같은 키로도 0건을 반환한다 — 원인 불명.)
+ *
+ * 두 경로를 함께 검증한다:
+ *   경과일수 경로  dayPillarFromDate  — 앵커에서 며칠 지났나
+ *   JDN 경로       dayPillarFromJdn   — (율리우스적일 + 49) % 60
+ * 둘은 공유 코드가 없다. 셋(KASI 포함)이 다 맞아야 통과다.
  */
 
-import { fetchDayInfo, KasiError } from '../packages/manseryeok/src/kasi-client.ts';
-import { dayPillarFromDate, DAY_ANCHOR } from '../packages/manseryeok/src/day-hour-pillar.ts';
-import { ganjiName, STEMS, BRANCHES } from '../packages/manseryeok/src/types.ts';
+import {
+  DAY_ANCHOR,
+  dayPillarFromDate,
+  dayPillarFromJdn,
+  julianDayNumber,
+} from '../packages/manseryeok/src/day-hour-pillar.ts';
+import { ganjiName } from '../packages/manseryeok/src/types.ts';
 
-/** 한글 간지("신축")를 60갑자 인덱스로. 한자 병기가 붙어 있어도 앞 두 글자만 본다. */
-const HANGUL_STEMS = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계'];
-const HANGUL_BRANCHES = ['자', '축', '인', '묘', '진', '사', '오', '미', '신', '유', '술', '해'];
+const HANGUL_STEMS = '갑을병정무기경신임계';
+const HANGUL_BRANCHES = '자축인묘진사오미신유술해';
 
+/** "병인(丙寅)" 또는 "병인" → 60갑자 인덱스 */
 function parseIljin(iljin: string): number {
   const s = HANGUL_STEMS.indexOf(iljin[0]);
   const b = HANGUL_BRANCHES.indexOf(iljin[1]);
@@ -26,68 +36,114 @@ function parseIljin(iljin: string): number {
   throw new Error(`불가능한 간지: ${iljin}`);
 }
 
-/** 검증 표본. 자오선 전환·서머타임 구간·경계를 의도적으로 포함한다. */
-const SAMPLE_DATES: Array<[number, number, number]> = [
-  [1900, 1, 1], [1905, 6, 15], [1912, 1, 1], [1930, 7, 4],
-  [1948, 6, 1], [1950, 12, 25], [1954, 3, 21], [1958, 6, 15],
-  [1961, 8, 10], [1970, 1, 1], [1984, 2, 2], [1987, 5, 10],
-  [1988, 9, 17], [1999, 12, 31], [2000, 2, 29], [2010, 5, 5],
-  [2024, 1, 1], [2026, 8, 6],
+const key = process.env.KASI_SERVICE_KEY;
+if (!key) {
+  console.error('KASI_SERVICE_KEY가 없습니다. node --env-file=.env.local 로 실행하세요.');
+  process.exit(1);
+}
+
+const FROM = 1900;
+const TO = 2026;
+
+/** 음력 월/일을 여러 개 돌려 표본을 늘린다. 각 호출이 연도 수만큼 행을 준다. */
+const LUNAR_PROBES: Array<[number, number]> = [
+  [1, 1],
+  [5, 5],
+  [8, 15],
 ];
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const tag = (s: string, n: string) => s.match(new RegExp(`<${n}>([^<]*)</${n}>`))?.[1] ?? null;
 
-const results: Array<{ date: string; kasi: string; ours: string; delta: number }> = [];
-const failures: string[] = [];
-
-for (const [y, m, d] of SAMPLE_DATES) {
-  const label = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  try {
-    const info = await fetchDayInfo(y, m, d);
-    const expected = parseIljin(info.iljin);
-    const actual = dayPillarFromDate(y, m, d);
-    const delta = (((expected - actual) % 60) + 60) % 60;
-    results.push({
-      date: label,
-      kasi: `${info.iljin}(${expected})`,
-      ours: `${ganjiName(actual)}(${actual})`,
-      delta,
-    });
-  } catch (e) {
-    failures.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
-    if (e instanceof KasiError && e.resultCode !== '00-empty') break;
-  }
-  await sleep(120); // 포털 호출 간격 예의
+interface Row {
+  date: string;
+  kasi: number;
+  elapsed: number;
+  jdn: number;
+  jdMatch: boolean;
 }
 
-if (results.length === 0) {
-  console.error('\n대조를 한 건도 못 했습니다.\n');
-  for (const f of failures.slice(0, 3)) console.error('  ' + f);
-  console.error('\nKASI 음양력 API 활용신청 승인 여부와 전파 시간을 확인하세요.');
+const rows: Row[] = [];
+
+for (const [lunMonth, lunDay] of LUNAR_PROBES) {
+  const url =
+    'http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService/getSpcifyLunCalInfo' +
+    `?serviceKey=${key}&fromSolYear=${FROM}&toSolYear=${TO}` +
+    `&lunMonth=${String(lunMonth).padStart(2, '0')}&lunDay=${String(lunDay).padStart(2, '0')}` +
+    `&leapMonth=${encodeURIComponent('평')}&numOfRows=300`;
+
+  const res = await fetch(url);
+  const xml = await res.text();
+  const code = tag(xml, 'resultCode') ?? tag(xml, 'returnReasonCode');
+
+  if (res.status !== 200 || code !== '00') {
+    console.error(`KASI 요청 실패 (음력 ${lunMonth}/${lunDay}): ${res.status} code=${code}`);
+    console.error(tag(xml, 'resultMsg') ?? tag(xml, 'returnAuthMsg') ?? '');
+    process.exit(1);
+  }
+
+  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const item = m[1];
+    const y = Number(tag(item, 'solYear'));
+    const mo = Number(tag(item, 'solMonth'));
+    const d = Number(tag(item, 'solDay'));
+    const iljin = tag(item, 'lunIljin');
+    const solJd = Number(tag(item, 'solJd'));
+    if (!iljin || !y) continue;
+
+    rows.push({
+      date: `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+      kasi: parseIljin(iljin),
+      elapsed: dayPillarFromDate(y, mo, d),
+      jdn: dayPillarFromJdn(y, mo, d),
+      jdMatch: julianDayNumber(y, mo, d) === solJd,
+    });
+  }
+}
+
+if (rows.length === 0) {
+  console.error('대조 표본이 없습니다. API 승인 상태를 확인하세요.');
   process.exit(1);
 }
 
-console.log('\n날짜         KASI 일진        우리 계산        차이');
-console.log('─'.repeat(60));
-for (const r of results) {
-  const mark = r.delta === 0 ? '✔' : `✖ +${r.delta}일`;
-  console.log(`${r.date}  ${r.kasi.padEnd(16)} ${r.ours.padEnd(16)} ${mark}`);
+const deltas = new Map<number, number>();
+for (const r of rows) {
+  const delta = (((r.kasi - r.elapsed) % 60) + 60) % 60;
+  deltas.set(delta, (deltas.get(delta) ?? 0) + 1);
 }
 
-const deltas = new Set(results.map((r) => r.delta));
-console.log('─'.repeat(60));
-console.log(`대조 ${results.length}건, 실패 ${failures.length}건`);
+const pathMismatch = rows.filter((r) => r.elapsed !== r.jdn);
+const jdMismatch = rows.filter((r) => !r.jdMatch);
+
+console.log(`\n표본 ${rows.length}건 (${FROM}~${TO}, 음력 ${LUNAR_PROBES.map(([m, d]) => `${m}/${d}`).join(', ')})`);
+console.log(`앵커: ${DAY_ANCHOR.year}-${DAY_ANCHOR.month}-${DAY_ANCHOR.day} = ${ganjiName(DAY_ANCHOR.ganji)}(${DAY_ANCHOR.ganji})`);
+console.log('─'.repeat(56));
+console.log(`경과일수 경로 vs JDN 경로 불일치 : ${pathMismatch.length}건`);
+console.log(`계산한 JDN vs KASI solJd 불일치  : ${jdMismatch.length}건`);
+console.log(`KASI 일진 대비 델타 분포         : ${[...deltas.entries()].map(([k, v]) => `+${k}: ${v}건`).join(', ')}`);
+console.log('─'.repeat(56));
+
+let failed = false;
+
+if (pathMismatch.length > 0) {
+  console.log(`\n✖ 두 계산 경로가 갈립니다 (예: ${pathMismatch[0].date}). 산술 버그입니다.`);
+  failed = true;
+}
+if (jdMismatch.length > 0) {
+  console.log(`\n✖ JDN 계산이 KASI solJd와 다릅니다 (예: ${jdMismatch[0].date}).`);
+  failed = true;
+}
 
 if (deltas.size === 1 && deltas.has(0)) {
-  console.log(`\n✔ 앵커 정확: ${DAY_ANCHOR.year}-${DAY_ANCHOR.month}-${DAY_ANCHOR.day} = 甲子`);
-  console.log('  day-hour-pillar.ts의 미검증 경고를 지워도 됩니다.');
+  console.log('\n✔ 앵커 정확. 세 경로(KASI 일진 · 경과일수 · JDN)가 전부 일치합니다.');
 } else if (deltas.size === 1) {
-  const [delta] = [...deltas];
+  const [delta] = [...deltas.keys()];
   console.log(`\n✖ 앵커가 일정하게 ${delta}칸 어긋납니다.`);
-  console.log(`  DAY_ANCHOR.ganji를 ${DAY_ANCHOR.ganji} → ${(DAY_ANCHOR.ganji + delta) % 60}로 고치면 전부 맞습니다.`);
-  process.exit(1);
+  console.log(`  DAY_ANCHOR.ganji: ${DAY_ANCHOR.ganji} → ${(DAY_ANCHOR.ganji + delta) % 60}`);
+  failed = true;
 } else {
-  console.log(`\n✖ 차이가 일정하지 않습니다: ${[...deltas].join(', ')}`);
-  console.log('  앵커 문제가 아니라 날짜 산술이 틀렸다는 뜻입니다. 경과일수 계산을 보세요.');
-  process.exit(1);
+  console.log(`\n✖ 델타가 일정하지 않습니다: ${[...deltas.keys()].join(', ')}`);
+  console.log('  앵커 문제가 아니라 날짜 산술이 틀렸다는 뜻입니다.');
+  failed = true;
 }
+
+process.exit(failed ? 1 : 0);

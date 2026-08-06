@@ -7,6 +7,8 @@
  *   서머타임   1948~1961 시행 구간 보정
  *   연 경계    입춘 기준 (양력 1월 1일 아님)
  *   자시       야자시/조자시 둘 다 계산해서 반환. 어느 쪽인지는 Pan.jasi가 담는다
+ *   일주 앵커  양력 1984-02-02 = 병인(丙寅). KASI 음양력 API 1차 자료로 확정.
+ *              경과일수 경로와 JDN 경로가 독립 구현이고 381건에서 일치.
  *   절기 시각  UTC로 저장하고 표시할 때만 KST 변환 (KST 저장은 진태양시와 이중 보정 위험)
  *   지원 연도  1900~2100
  */
@@ -45,6 +47,8 @@ export type { WallClock, TrueSolarResult, TrueSolarOptions } from './true-solar-
 export {
   DAY_ANCHOR,
   dayPillarFromDate,
+  dayPillarFromJdn,
+  julianDayNumber,
   dayAndHourPillars,
   hourBranchIndex,
   hourStemIndex,
