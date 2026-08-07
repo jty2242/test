@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "@saju/web"],
       "port": 3111
+    },
+    {
+      "name": "saju-web-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--workspace", "@saju/web"],
+      "port": 3111
     }
   ]
 }
