@@ -94,6 +94,9 @@ export {
 } from './elements.ts';
 export type { Element, ElementCount, ElementBalance } from './elements.ts';
 
+export { interpret } from './interpret.ts';
+export type { Interpretation } from './interpret.ts';
+
 export { calculate, isJasiAmbiguousHour, InvalidBirthInput } from './calculate.ts';
 export type { BirthInput, SajuResult, Chart } from './calculate.ts';
 

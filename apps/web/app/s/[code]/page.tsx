@@ -13,6 +13,7 @@ import {
   ganjiName,
   stemOf,
   elementBalance,
+  interpret,
   MalformedPanCode,
   ELEMENTS,
   type Pan,
@@ -66,6 +67,7 @@ export default async function ResultPage({ params }: { params: Promise<{ code: s
   if (!pan) notFound();
 
   const balance = elementBalance(pan);
+  const reading = interpret(pan);
   const pillars: Array<[string, number | null]> = [
     ['시', pan.hour],
     ['일', pan.day],
@@ -134,6 +136,25 @@ export default async function ResultPage({ params }: { params: Promise<{ code: s
         {balance.dominant} 과다
         {balance.missing.length > 0 ? ` · ${balance.missing.join('')} 없음` : ''}
       </p>
+
+      <section style={{ marginTop: 36, lineHeight: 1.7 }}>
+        <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>{reading.dayMasterTitle}</h2>
+        <p style={{ margin: 0, fontSize: 15 }}>{reading.dayMasterText}</p>
+
+        {reading.excessText ? (
+          <p style={{ marginTop: 16, fontSize: 15 }}>
+            <strong style={{ color: '#8a8578', fontWeight: 400 }}>{balance.dominant} 과다 · </strong>
+            {reading.excessText}
+          </p>
+        ) : null}
+
+        {reading.absenceTexts.map((text, i) => (
+          <p key={balance.missing[i]} style={{ marginTop: 12, fontSize: 15 }}>
+            <strong style={{ color: '#8a8578', fontWeight: 400 }}>{balance.missing[i]} 없음 · </strong>
+            {text}
+          </p>
+        ))}
+      </section>
 
       {/* 카드 이미지 자체를 보여준다. 길게 눌러 저장하는 게 모바일의 저장 동작이다. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
